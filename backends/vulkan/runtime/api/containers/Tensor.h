@@ -64,7 +64,7 @@ std::vector<int64_t> calculate_padded_sizes(
  */
 utils::uvec3 calculate_image_extents(
     const std::vector<int64_t>& padded_sizes,
-    const std::vector<int64_t>& axis_mapping,
+    const std::vector<int64_t>& axis_map,
     const utils::GPUMemoryLayout memory_layout);
 
 struct LastAccess {
@@ -90,7 +90,7 @@ class vTensorStorage final {
       Context* context,
       const utils::StorageType storage_type,
       const utils::GPUMemoryLayout gpu_memory_layout,
-      const std::vector<int64_t>& axis_mapping,
+      const std::vector<int64_t>& axis_map,
       const std::vector<int64_t>& padded_sizes,
       const vkapi::ScalarType dtype,
       const bool allocate_memory = true);
@@ -160,7 +160,7 @@ class vTensorStorage final {
 
   void discard_and_reallocate(
       const std::vector<int64_t>& padded_sizes,
-      const std::vector<int64_t>& axis_mapping,
+      const std::vector<int64_t>& axis_map,
       const utils::GPUMemoryLayout gpu_memory_layout,
       const vkapi::ScalarType dtype);
 };
@@ -252,9 +252,9 @@ class vTensor final {
   // Describes which axis of an image texture each dimension of the tensor maps
   // to. The axis mapping allows texture based tensors to be permuted and
   // transposed without modifying the underlying texture storage. For a more in
-  // depth explanation of axis mapping, see the `default_axis_mapping()`
+  // depth explanation of axis mapping, see the `default_axis_map()`
   // function.
-  std::vector<int64_t> axis_mapping_;
+  std::vector<int64_t> axis_map_;
 
   /*
    * The below can be consider "layout" metadata as well, but are derived from
@@ -286,6 +286,13 @@ class vTensor final {
   // texture_limits() function for more context. Note that the texture limits
   // are only relevant for texture storage, and not for buffer storage.
   TextureLimits texture_limits_;
+  // Contains the physical texture extents of the underlying image texture, but
+  // re-ordered such that the first element is the extent of the axis used to
+  // represent the tensor's width dimension, the second element is the extent of
+  // the axis used to represent the tensor's height dimension, and the third
+  // element is the extent of the axis used to represent the tensor's channels
+  // dimension.
+  TextureLimits logical_limits_;
 
   /*
    * Utility GPU buffers that can be passed to shaders in order to convey tensor
@@ -299,8 +306,9 @@ class vTensor final {
   ParamsBuffer sizes_uniform_;
   ParamsBuffer strides_uniform_;
   ParamsBuffer numel_uniform_;
-  ParamsBuffer axis_mapping_uniform_;
+  ParamsBuffer axis_map_uniform_;
   ParamsBuffer texture_limits_uniform_;
+  ParamsBuffer logical_limits_uniform_;
 
   vTensorStorage storage_;
 
@@ -357,6 +365,10 @@ class vTensor final {
     return storage_.image_extents_;
   }
 
+ private:
+  void update_logical_limits();
+
+ public:
   /*
    * Returns the image extents of the underlying image texture, but re-ordered
    * such that the first element is the extent of the axis used to represent the
@@ -364,7 +376,7 @@ class vTensor final {
    * to represent the tensor's height dimension, and the third element is the
    * extent of the axis used to represent the tensor's channels dimension.
    */
-  utils::uvec3 mapped_extents() const;
+  utils::uvec3 logical_extents() const;
 
   /*
    * Extract an `vkapi::ScalarType` from the TensorOptions member
@@ -397,6 +409,10 @@ class vTensor final {
     return dim_order_;
   }
 
+  inline const std::vector<int64_t>& axis_map() const {
+    return axis_map_;
+  }
+
   inline const std::vector<int64_t>& strides() const {
     return strides_;
   }
@@ -424,7 +440,7 @@ class vTensor final {
    * Returns a GPU buffer containing the texture axis mapping for each dimension
    * of the tensor, in WHCN dimension order.
    */
-  const vkapi::BufferBindInfo axis_mapping_ubo();
+  const vkapi::BufferBindInfo axis_map_ubo();
 
   /*
    * Returns a GPU buffer containing the virtual image extents of the tensor.
@@ -434,6 +450,16 @@ class vTensor final {
    * working outside the limits of the texture.
    */
   const vkapi::BufferBindInfo texture_limits_ubo();
+
+  /*
+   * Returns a GPU buffer containing the logical image extents of the tensor.
+   * The logical extents are a re-ordering of the physical image extents such
+   * that the first element is the extent of the axis used to represent the
+   * tensor's width dimension, the second element is the extent of the axis used
+   * to represent the tensor's height dimension, and the third element is the
+   * extent of the axis used to represent the tensor's channels dimension.
+   */
+  const vkapi::BufferBindInfo logical_limits_ubo();
 
   /*
    * Returns the number of elements in the buffer used to store the tensor.
