@@ -9,6 +9,8 @@
 package org.pytorch.executorch;
 
 import com.facebook.jni.annotations.DoNotStrip;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Optional;
 import org.pytorch.executorch.annotations.Experimental;
@@ -280,5 +282,65 @@ public class EValue {
 
   private String getTypeName(int typeCode) {
     return typeCode >= 0 && typeCode < TYPE_NAMES.length ? TYPE_NAMES[typeCode] : "Unknown";
+  }
+
+  /**
+   * Serializes an {@code EValue} into a {@link ByteBuffer}.
+   * @return The serialized {@code ByteBuffer}.
+   * 
+   * @apiNote This method is experimental and subject to change without notice.
+   * This does NOT supoprt list type.
+   */
+  public ByteBuffer toByteBuffer() {
+    if (isNone()) {
+      return ByteBuffer.allocateDirect(1).put((byte) TYPE_CODE_NONE);
+    } else if (isTensor()) {
+      Tensor t = toTensor();
+      ByteBuffer tByteBuffer = t.toByteBuffer();
+      return ByteBuffer.allocateDirect(1 + tByteBuffer.array().length).put((byte) TYPE_CODE_TENSOR).put(tByteBuffer);
+    } else if (isBool()) {
+      return ByteBuffer.allocateDirect(2).put((byte) TYPE_CODE_BOOL).put((byte) (toBool() ? 1 : 0));
+    } else if (isInt()) {
+      return ByteBuffer.allocateDirect(9).put((byte) TYPE_CODE_INT).putLong(toInt());
+    } else if (isDouble()) {
+      return ByteBuffer.allocateDirect(9).put((byte) TYPE_CODE_DOUBLE).putDouble(toDouble());
+    } else if (isString()) {
+      return ByteBuffer.allocateDirect(1 + toString().length()).put((byte) TYPE_CODE_STRING).put(toString().getBytes());
+    } else {
+      throw new IllegalArgumentException("Unknown Tensor dtype");
+    }
+  }
+
+  /**
+   * Deserializes an {@code EValue} from a {@link ByteBuffer}.
+   * @param buffer The {@link ByteBuffer} to deserialize from.
+   * @return The deserialized {@code EValue}.
+   * 
+   * @apiNote This method is experimental and subject to change without notice.
+   * This does NOT list type.
+   */
+  public static EValue fromByteBuffer(ByteBuffer buffer) {
+    if (buffer == null) {
+      throw new IllegalArgumentException("buffer cannot be null");
+    }
+    if (!buffer.hasRemaining()) {
+      throw new IllegalArgumentException("invalid buffer");
+    }
+    int typeCode = buffer.get();
+    switch (typeCode) {
+      case TYPE_CODE_NONE:
+        return new EValue(TYPE_CODE_NONE);
+      case TYPE_CODE_TENSOR:
+        return from(Tensor.fromByteBuffer(buffer));
+      case TYPE_CODE_STRING:
+        return from(StandardCharsets.UTF_8.decode(buffer).toString());
+      case TYPE_CODE_DOUBLE:
+        return from(buffer.getDouble());
+      case TYPE_CODE_INT:
+        return from(buffer.getLong());
+      case TYPE_CODE_BOOL:
+        return from(buffer.get() != 0);
+    }
+    throw new IllegalArgumentException("invalid type code: " + typeCode);
   }
 }

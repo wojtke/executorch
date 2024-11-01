@@ -10,6 +10,8 @@ package org.pytorch.executorch;
 
 import com.facebook.jni.HybridData;
 import com.facebook.jni.annotations.DoNotStrip;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -678,5 +680,100 @@ public abstract class Tensor {
     }
     tensor.mHybridData = hybridData;
     return tensor;
+  }
+
+  private static final byte[] intToByteArray(int value) {
+    return new byte[] {
+            (byte)(value >>> 24),
+            (byte)(value >>> 16),
+            (byte)(value >>> 8),
+            (byte)value};
+  }
+
+  /**
+   * Serializes a {@code Tensor} into a {@link ByteBuffer}.
+   * @return The serialized {@code ByteBuffer}.
+   * 
+   * @apiNote This method is experimental and subject to change without notice.
+   * This does NOT supoprt list type.
+   */
+  public ByteBuffer toByteBuffer() {
+    int dtypeSize = 0;
+    if (dtype() == DType.FLOAT) {
+      dtypeSize = 4;
+    } else if (dtype() == DType.DOUBLE) {
+      dtypeSize = 8;
+    } else if (dtype() == DType.UINT8) {
+      dtypeSize = 1;
+    } else if (dtype() == DType.INT8) {
+      dtypeSize = 1;
+    } else if (dtype() == DType.INT16) {
+      dtypeSize = 2;
+    } else if (dtype() == DType.INT32) {
+      dtypeSize = 4;
+    } else if (dtype() == DType.INT64) {
+      dtypeSize = 8;
+    } else {
+      throw new IllegalArgumentException("Unknown Tensor dtype");
+    }
+    ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1 + 1 + 4 * shape.length + dtypeSize * (int) numel());
+    byteBuffer.put((byte) dtype().jniCode);
+    byteBuffer.put((byte) shape.length);
+    for (long s : shape) {
+      byteBuffer.put(intToByteArray((int) s));
+    }
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(bos)) {
+      out.writeObject(getRawDataBuffer());
+      out.flush();
+      byteBuffer.put(bos.toByteArray());
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
+    return byteBuffer;
+  }
+
+  /**
+   * Deserializes a {@code Tensor} from a {@link ByteBuffer}.
+   * @param buffer The {@link ByteBuffer} to deserialize from.
+   * @return The deserialized {@code Tensor}.
+   * 
+   * @apiNote This method is experimental and subject to change without notice.
+   * This does NOT supoprt list type.
+   */
+  public static Tensor fromByteBuffer(ByteBuffer buffer) {
+    if (buffer == null) {
+      throw new IllegalArgumentException("buffer cannot be null");
+    }
+    if (!buffer.hasRemaining()) {
+      throw new IllegalArgumentException("invalid buffer");
+    }
+    byte scalarType = buffer.get();
+    byte numberOfDimensions = buffer.get();
+    long[] shape = new long[(int) numberOfDimensions];
+    long numel = 1;
+    for (int i = 0; i < numberOfDimensions; i++) {
+      int dim = buffer.getInt();
+      if (dim < 0) {
+        throw new IllegalArgumentException("invalid shape");
+      }
+      shape[i] = dim;
+      numel *= dim;
+    }
+    if (scalarType == DType.FLOAT.jniCode) {
+      return new Tensor_float32(buffer.asFloatBuffer(), shape);
+    } else if (scalarType == DType.DOUBLE.jniCode) {
+      return new Tensor_float64(buffer.asDoubleBuffer(), shape);
+    } else if (scalarType == DType.UINT8.jniCode) {
+      return new Tensor_uint8(buffer, shape);
+    } else if (scalarType == DType.INT8.jniCode) {
+      return new Tensor_int8(buffer, shape);
+    } else if (scalarType == DType.INT16.jniCode) {
+      return new Tensor_int32(buffer.asIntBuffer(), shape);
+    } else if (scalarType == DType.INT64.jniCode) {
+      return new Tensor_int64(buffer.asLongBuffer(), shape);
+    } else {
+      throw new IllegalArgumentException("Unknown Tensor dtype");
+    }
   }
 }

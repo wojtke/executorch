@@ -22,3 +22,7 @@ task makeJar(type: Jar) {
         implementation 'com.facebook.soloader:nativeloader:0.10.5'
     }
 }
+
+dependencies {
+    testImplementation "junit:junit:4.12"
+}
