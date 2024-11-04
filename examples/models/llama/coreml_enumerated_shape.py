@@ -8,6 +8,7 @@ from executorch.examples.models.llama.export_llama_lib import (
 from numpy import dtype
 
 parser = build_args_parser()
+parser.add_argument('--use_enumerated_shapes', action='store_true')
 args = parser.parse_args()
 
 model_manager = _prepare_for_llama_export("llama2", args)
@@ -83,7 +84,7 @@ mlmodel = ct.convert(
             max_batch_size=max_batch_size,
             args=args,
             coreml=True,
-            use_enumerated_shapes=True,
+            use_enumerated_shapes=args.use_enumerated_shapes,
         )
     ),
     outputs=[ct.TensorType(name="op")],
