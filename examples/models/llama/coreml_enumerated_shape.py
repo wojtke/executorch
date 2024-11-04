@@ -8,7 +8,7 @@ from executorch.examples.models.llama.export_llama_lib import (
 from numpy import dtype
 
 parser = build_args_parser()
-parser.add_argument('--use_enumerated_shapes', action='store_true')
+parser.add_argument("--use_enumerated_shapes", action="store_true")
 args = parser.parse_args()
 
 model_manager = _prepare_for_llama_export("llama2", args)
@@ -35,9 +35,9 @@ def get_example_inputs(max_batch_size, args, coreml=False, use_enumerated_shapes
         dtype=np.int64,
     )
 
+    print("TOKENS SHAPE: ", tokens.shape)
+
     if args.use_kv_cache:
-        # NOTE: torch.jit.trace does not work if tensor has size 1, but ct.convert does not work if not 512, so for KV cache with batch input, size should be 1
-        # input_pos = torch.tensor([0 for _ in range(max_batch_size)], dtype=torch.long)
         input_pos = torch.tensor([0], dtype=torch.long)
         ct_input_pos = ct.TensorType(shape=ct.Shape([1]), dtype=np.int64)
 
@@ -51,13 +51,7 @@ def get_example_inputs(max_batch_size, args, coreml=False, use_enumerated_shapes
 
 
 # Batch with kv cache runs into issues
-# Either we need input_pos to be size batch_size to export with jit.trace or we need it to be size 1 to export with ct.convert
-# Might try refactoring the model so that jit.trace works when it is size 1 (interested as starting position)
-if args.use_kv_cache:
-    max_batch_size = 1
-else:
-    max_batch_size = 128
-
+max_batch_size = args.max_seq_length
 example_inputs = get_example_inputs(max_batch_size, args)
 
 print("Example input shapes: ", [t.shape for t in example_inputs])

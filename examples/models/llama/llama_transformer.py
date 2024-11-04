@@ -196,11 +196,11 @@ class KVCache(nn.Module):
             # narrowed_v = self.v_cache.narrow(dim_to_slice, start_pos, seq_length)
 
             if self.transpose_cache:
-                narrowed_k = self.k_cache[:, :, input_pos:(input_pos+seq_length), :]
-                narrowed_v = self.v_cache[:, :, input_pos:(input_pos+seq_length), :]
+                narrowed_k = self.k_cache[:, :, input_pos : (input_pos + seq_length), :]
+                narrowed_v = self.v_cache[:, :, input_pos : (input_pos + seq_length), :]
             else:
-                narrowed_k = self.k_cache[:, input_pos:(input_pos+seq_length), :, :]
-                narrowed_v = self.v_cache[:, input_pos:(input_pos+seq_length), :, :]
+                narrowed_k = self.k_cache[:, input_pos : (input_pos + seq_length), :, :]
+                narrowed_v = self.v_cache[:, input_pos : (input_pos + seq_length), :, :]
 
             narrowed_k.copy_(k_val)
             narrowed_v.copy_(v_val)
@@ -257,7 +257,8 @@ class SDPA(nn.Module):
             torch._check(start_pos < self.max_seq_len)
             seq_length = q.size(2)
             # pyre-ignore: Incompatible parameter type [6]
-            attn_mask = mask.narrow(0, start_pos, seq_length)
+            # attn_mask = mask.narrow(0, start_pos, seq_length)
+            attn_mask = mask[start_pos : (start_pos + seq_length)]
         else:
             attn_mask = mask[None, None, input_pos]
 
@@ -518,9 +519,13 @@ class Transformer(nn.Module):
                 torch._check_is_size(input_pos_item)
                 torch._check(input_pos_item < self.params.max_seq_len)
                 # pyre-ignore: Incompatible parameter type [6]: torch.narrow does expect int or Tensor
-                freqs_cos = self.freqs_cos[input_pos_item:(input_pos_item + seqlen)] #.narrow(0, input_pos_item, seqlen)
+                freqs_cos = self.freqs_cos[
+                    input_pos_item : (input_pos_item + seqlen)
+                ]  # .narrow(0, input_pos_item, seqlen)
                 # pyre-ignore: Incompatible parameter type [6]
-                freqs_sin = self.freqs_sin[input_pos_item:(input_pos_item + seqlen)] #.narrow(0, input_pos_item, seqlen)
+                freqs_sin = self.freqs_sin[
+                    input_pos_item : (input_pos_item + seqlen)
+                ]  # .narrow(0, input_pos_item, seqlen)
             else:
                 # When not using dynamic shape, use of the .item results in
                 # symints, due to querying the data from tensor.
