@@ -191,9 +191,16 @@ class KVCache(nn.Module):
             # when dim_to_slice is 1
             # We use .narrow() here to make the compiler happy
             # pyre-ignore: Incompatible parameter type [6]
-            narrowed_k = self.k_cache.narrow(dim_to_slice, start_pos, seq_length)
-            # pyre-ignore: Incompatible parameter type [6]
-            narrowed_v = self.v_cache.narrow(dim_to_slice, start_pos, seq_length)
+            # narrowed_k = self.k_cache.narrow(dim_to_slice, start_pos, seq_length)
+            # # pyre-ignore: Incompatible parameter type [6]
+            # narrowed_v = self.v_cache.narrow(dim_to_slice, start_pos, seq_length)
+
+            if self.transpose_cache:
+                narrowed_k = self.k_cache[:, :, input_pos:(input_pos+seq_length), :]
+                narrowed_v = self.v_cache[:, :, input_pos:(input_pos+seq_length), :]
+            else:
+                narrowed_k = self.k_cache[:, input_pos:(input_pos+seq_length), :, :]
+                narrowed_v = self.v_cache[:, input_pos:(input_pos+seq_length), :, :]
 
             narrowed_k.copy_(k_val)
             narrowed_v.copy_(v_val)
@@ -511,9 +518,9 @@ class Transformer(nn.Module):
                 torch._check_is_size(input_pos_item)
                 torch._check(input_pos_item < self.params.max_seq_len)
                 # pyre-ignore: Incompatible parameter type [6]: torch.narrow does expect int or Tensor
-                freqs_cos = self.freqs_cos.narrow(0, input_pos_item, seqlen)
+                freqs_cos = self.freqs_cos[input_pos_item:(input_pos_item + seqlen)] #.narrow(0, input_pos_item, seqlen)
                 # pyre-ignore: Incompatible parameter type [6]
-                freqs_sin = self.freqs_sin.narrow(0, input_pos_item, seqlen)
+                freqs_sin = self.freqs_sin[input_pos_item:(input_pos_item + seqlen)] #.narrow(0, input_pos_item, seqlen)
             else:
                 # When not using dynamic shape, use of the .item results in
                 # symints, due to querying the data from tensor.
