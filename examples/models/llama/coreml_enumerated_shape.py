@@ -25,7 +25,7 @@ def get_example_inputs(max_batch_size, args, coreml=False, use_enumerated_shapes
                 [1, 1],
                 [1, max_batch_size],
             ],
-            default=[1, max_batch_size],
+            default=[1, 1],
         )
     else:
         ct_tokens_shape = ct.Shape([1, max_batch_size])
@@ -34,8 +34,6 @@ def get_example_inputs(max_batch_size, args, coreml=False, use_enumerated_shapes
         shape=ct_tokens_shape,
         dtype=np.int64,
     )
-
-    print("TOKENS SHAPE: ", tokens.shape)
 
     if args.use_kv_cache:
         input_pos = torch.tensor([0], dtype=torch.long)
@@ -54,9 +52,12 @@ def get_example_inputs(max_batch_size, args, coreml=False, use_enumerated_shapes
 max_batch_size = args.max_seq_length
 example_inputs = get_example_inputs(max_batch_size, args)
 
-print("Example input shapes: ", [t.shape for t in example_inputs])
 
 traced_model = torch.jit.trace(model, example_inputs)
+
+print("Example input shapes: ", [t.shape for t in example_inputs])
+
+input("Press enter to continue...")
 
 states = None
 if args.use_kv_cache:
